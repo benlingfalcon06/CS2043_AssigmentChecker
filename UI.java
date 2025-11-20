@@ -1,123 +1,178 @@
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
-/***************************************************88
- * UI Class for Test Runner Application
- * 
- * author: Atharva Naik
- * Date: November 19, 2025
- * 
- */
+import java.awt.event.ActionEvent;
+import java.io.File;
 
-public class UI extends JFrame 
-{
+public class UI extends JFrame {
 
-    private Coordinator coordinator;
+    private final Coordinator coordinator = new Coordinator();
 
-    private JComboBox<String> programList;
-    private JComboBox<String> suiteList;
-    private JTextArea output;
+    // GUI components
+    private JLabel selectedFileLabel;
+    private JTextArea testSuiteArea;
+    private JTextArea resultArea;
+    private JButton uploadButton;
+    private JButton deleteButton;
+    private JButton executeButton;
 
-    public UI(Coordinator coordinator) 
-    {
-        this.coordinator = coordinator;
+    public UI() {
+        super("Assignment Checker");
 
-        setTitle("Test Runner UI");
-        setSize(600, 400);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
+        initComponents();
+        layoutComponents();
+        attachListeners();
 
-        ///////////////////////////////////////////
-        // TOP PANEL (Buttons)
-        ///////////////////////////////////////////
-        JPanel topPanel = new JPanel();
-        JButton btnLoadPrograms = new JButton("List Programs");
-        JButton btnLoadSuites = new JButton("List Test Suites");
-        JButton btnRun = new JButton("Run Tests");
-
-        topPanel.add(btnLoadPrograms);
-        topPanel.add(btnLoadSuites);
-        topPanel.add(btnRun);
-
-        add(topPanel, BorderLayout.NORTH);
-
-        ///////////////////////////////////////////
-        // MIDDLE PANEL (Dropdowns)
-        ///////////////////////////////////////////
-        JPanel middlePanel = new JPanel(new GridLayout(2, 2));
-
-        middlePanel.add(new JLabel("Select Program:"));
-        programList = new JComboBox<>();
-        middlePanel.add(programList);
-
-        middlePanel.add(new JLabel("Select Test Suite:"));
-        suiteList = new JComboBox<>();
-        middlePanel.add(suiteList);
-
-        add(middlePanel, BorderLayout.CENTER);
-
-        ///////////////////////////////////////////
-        // OUTPUT AREA
-        ///////////////////////////////////////////
-        output = new JTextArea();
-        output.setEditable(false);
-        add(new JScrollPane(output), BorderLayout.SOUTH);
-
-        ///////////////////////////////////////////
-        // BUTTON ACTIONS
-        ///////////////////////////////////////////
-
-        // Load programs into dropdown
-        btnLoadPrograms.addActionListener(e -> {
-            programList.removeAllItems();
-            var programs = coordinator.getPrograms().getAll();
-            for (Program p : programs) {
-                programList.addItem(p.getFolderPath());
-            }
-            output.setText("Programs loaded.");
-        });
-
-        // Load suites into dropdown
-        btnLoadSuites.addActionListener(e -> {
-            suiteList.removeAllItems();
-            var suites = coordinator.getSuites().getAll();
-            for (TestSuite ts : suites) {
-                suiteList.addItem(ts.getName());
-            }
-            output.setText("Test suites loaded.");
-        });
-
-        // RUN button
-        btnRun.addActionListener(e -> runSelected());
-
-        setVisible(true);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setLocationRelativeTo(null); // center window
     }
 
-    private void runSelected() {
+    private void initComponents() {
+        selectedFileLabel = new JLabel("No submission selected.");
+        selectedFileLabel.setForeground(Color.DARK_GRAY);
 
-        int pIndex = programList.getSelectedIndex();
-        int sIndex = suiteList.getSelectedIndex();
+        testSuiteArea = new JTextArea(10, 40);
+        testSuiteArea.setLineWrap(true);
+        testSuiteArea.setWrapStyleWord(true);
+        testSuiteArea.setText(
+                "# Test suite format:\n" +
+                "# one test per line:\n" +
+                "# input ==> expected output\n" +
+                "# Example:\n" +
+                "2 3 ==> 5\n" +
+                "10 -4 ==> 6\n"
+        );
 
-        if (pIndex < 0 || sIndex < 0) {
-            output.setText("Please select both a Program and a Test Suite.");
+        resultArea = new JTextArea(10, 40);
+        resultArea.setEditable(false);
+        resultArea.setLineWrap(true);
+        resultArea.setWrapStyleWord(true);
+
+        uploadButton = new JButton("Upload");
+        deleteButton = new JButton("Delete");
+        executeButton = new JButton("Execute");
+    }
+
+    private void layoutComponents() {
+        setLayout(new BorderLayout(5, 5));
+
+        // top panel
+        JPanel topPanel = new JPanel(new BorderLayout(5, 5));
+        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+        JPanel filePanel = new JPanel(new BorderLayout(5, 5));
+        filePanel.add(new JLabel("Submission: "), BorderLayout.WEST);
+        filePanel.add(selectedFileLabel, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(uploadButton);
+        buttonPanel.add(deleteButton);
+        buttonPanel.add(executeButton);
+
+        topPanel.add(filePanel, BorderLayout.CENTER);
+        topPanel.add(buttonPanel, BorderLayout.EAST);
+
+        // center panel
+        JPanel centerPanel = new JPanel(new GridLayout(1, 2, 5, 5));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+        JScrollPane testScroll = new JScrollPane(testSuiteArea);
+        testScroll.setBorder(new TitledBorder("Test Suite (input ==> expected output)"));
+
+        JScrollPane resultScroll = new JScrollPane(resultArea);
+        resultScroll.setBorder(new TitledBorder("Results"));
+
+        centerPanel.add(testScroll);
+        centerPanel.add(resultScroll);
+
+        add(topPanel, BorderLayout.NORTH);
+        add(centerPanel, BorderLayout.CENTER);
+    }
+
+    private void attachListeners() {
+        uploadButton.addActionListener(this::onUpload);
+        deleteButton.addActionListener(this::onDelete);
+        executeButton.addActionListener(this::onExecute);
+    }
+
+    // ===== button actions =====
+
+    private void onUpload(ActionEvent e) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Select student's .java file");
+        int result = chooser.showOpenDialog(this);
+
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File f = chooser.getSelectedFile();
+            if (!f.getName().endsWith(".java")) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Please select a .java file.",
+                        "Invalid file",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+            coordinator.setCurrentProgram(f);
+            selectedFileLabel.setText(f.getAbsolutePath());
+            resultArea.setText("");
+        }
+    }
+
+    private void onDelete(ActionEvent e) {
+        coordinator.setCurrentProgram(null);
+        selectedFileLabel.setText("No submission selected.");
+        resultArea.setText("");
+    }
+
+    private void onExecute(ActionEvent e) {
+        resultArea.setText("");
+
+        if (coordinator.getCurrentProgram() == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No submission selected. Please upload a .java file.",
+                    "No file",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
-        Program p = coordinator.getPrograms().getAll().get(pIndex);
-        TestSuite suite = coordinator.getSuites().getAll().get(sIndex);
+        // 1. Compile
+        StringBuilder compileLog = new StringBuilder();
+        boolean ok = coordinator.compileCurrentProgram(compileLog);
+        appendResult(compileLog.toString());
 
-        StringBuilder results = new StringBuilder();
-        results.append("Running ").append(suite.getName()).append("...\n");
-
-        for (TestCase tc : suite.getTestCases().getAll()) 
-        {
-            String actual = p.runOnInput(tc.getInput());
-            boolean pass = tc.compareOutput(actual);
-            results.append(tc.getName())
-                    .append(": ")
-                    .append(pass ? "PASS" : "FAIL")
-                    .append("\n");
+        if (!ok) {
+            appendResult("\nCompilation failed. Fix errors and try again.\n");
+            return;
         }
 
-        output.setText(results.toString());
+        // 2. Parse test suite from text area
+        TestSuit suite = coordinator.parseTestSuite("GUI Suite", testSuiteArea.getText());
+
+        if (suite.getTestCases().size() == 0) {
+            appendResult("No valid tests found in test suite.\n");
+            return;
+        }
+
+        // 3. Run tests
+        String runLog = coordinator.runTests(suite);
+        appendResult("\n" + runLog);
+    }
+
+    private void appendResult(String s) {
+        resultArea.append(s);
+        resultArea.setCaretPosition(resultArea.getDocument().getLength());
+    }
+
+    // ===== main =====
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new UI().setVisible(true);
+        });
     }
 }
+
