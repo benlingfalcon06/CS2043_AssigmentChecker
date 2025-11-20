@@ -1,5 +1,7 @@
 import java.io.FileWriter;
-import java.io.IOException;
+import java.io.Exception;
+import java.util.ArrayList;
+import java.util.Scanner;
 
 /*****************************************************
  * TestCase for test running the code
@@ -10,17 +12,23 @@ import java.io.IOException;
  ***************************************************/
 public class TestCase
 {
-    private FileWriter tc;
-    private String input;
+    private ArrayList<String> expout;
+    private String title;
+    private ArrayList<String> input;
     
-    public TestCase(String inputTC)
+    public static void create(String title1, String input1, String expout1)
     {
-       
-    }
-    
-    public static void create()
-    {
-        
+        File test = new File(title1);
+        input = new ArrayList<>();
+
+        Scanner fileData = new Scanner(test);
+
+        while(fileData.hasNextLine())
+        {
+            input.add(fileData.nextLine());
+        }
+
+
     }
     
     //For test
