@@ -10,18 +10,18 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 
 public class UI extends JFrame {
 
     private final Coordinator coordinator = new Coordinator();
 
-    // GUI components
-    private JLabel selectedFileLabel;
-    private JTextArea testSuiteArea;
+    private JLabel submissionLabel;
+    private JLabel answerLabel;
+    private JTextArea answerArea;
     private JTextArea resultArea;
-    private JButton uploadButton;
-    private JButton deleteButton;
-    private JButton executeButton;
+    private String answerText = null;
 
     public UI() {
         super("Assignment Checker");
@@ -30,156 +30,104 @@ public class UI extends JFrame {
         layoutComponents();
         attachListeners();
 
+        setSize(900, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(800, 600);
-        setLocationRelativeTo(null); // center window
+        setLocationRelativeTo(null);
     }
 
     private void initComponents() {
-        selectedFileLabel = new JLabel("No submission selected.");
-        selectedFileLabel.setForeground(Color.DARK_GRAY);
+        submissionLabel = new JLabel("No submission selected.");
+        answerLabel = new JLabel("No answer file selected.");
 
-        testSuiteArea = new JTextArea(10, 40);
-        testSuiteArea.setLineWrap(true);
-        testSuiteArea.setWrapStyleWord(true);
-        testSuiteArea.setText(
-                "# Test suite format:\n" +
-                "# one test per line:\n" +
-                "# input ==> expected output\n" +
-                "# Example:\n" +
-                "2 3 ==> 5\n" +
-                "10 -4 ==> 6\n"
-        );
+        answerArea = new JTextArea();
+        answerArea.setEditable(false);
+        answerArea.setBorder(new TitledBorder("Answer File Preview"));
 
-        resultArea = new JTextArea(10, 40);
+        resultArea = new JTextArea();
         resultArea.setEditable(false);
-        resultArea.setLineWrap(true);
-        resultArea.setWrapStyleWord(true);
-
-        uploadButton = new JButton("Upload");
-        deleteButton = new JButton("Delete");
-        executeButton = new JButton("Execute");
+        resultArea.setBorder(new TitledBorder("Results"));
     }
 
     private void layoutComponents() {
-        setLayout(new BorderLayout(5, 5));
+        setLayout(new BorderLayout());
 
-        // top panel
-        JPanel topPanel = new JPanel(new BorderLayout(5, 5));
-        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        JPanel filePanel = new JPanel(new GridLayout(2, 1));
 
-        JPanel filePanel = new JPanel(new BorderLayout(5, 5));
-        filePanel.add(new JLabel("Submission: "), BorderLayout.WEST);
-        filePanel.add(selectedFileLabel, BorderLayout.CENTER);
+        JPanel subPanel = new JPanel(new BorderLayout());
+        JButton uploadSub = new JButton("Upload Submission (.java)");
+        subPanel.add(uploadSub, BorderLayout.EAST);
+        subPanel.add(submissionLabel, BorderLayout.CENTER);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        buttonPanel.add(uploadButton);
-        buttonPanel.add(deleteButton);
-        buttonPanel.add(executeButton);
+        JPanel ansPanel = new JPanel(new BorderLayout());
+        JButton uploadAns = new JButton("Upload Answer (.txt)");
+        ansPanel.add(uploadAns, BorderLayout.EAST);
+        ansPanel.add(answerLabel, BorderLayout.CENTER);
 
-        topPanel.add(filePanel, BorderLayout.CENTER);
-        topPanel.add(buttonPanel, BorderLayout.EAST);
+        filePanel.add(subPanel);
+        filePanel.add(ansPanel);
 
-        // center panel
-        JPanel centerPanel = new JPanel(new GridLayout(1, 2, 5, 5));
-        centerPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        JPanel center = new JPanel(new GridLayout(1, 2));
+        center.add(new JScrollPane(answerArea));
+        center.add(new JScrollPane(resultArea));
 
-        JScrollPane testScroll = new JScrollPane(testSuiteArea);
-        testScroll.setBorder(new TitledBorder("Test Suite (input ==> expected output)"));
+        JButton execute = new JButton("Execute");
+        add(filePanel, BorderLayout.NORTH);
+        add(center, BorderLayout.CENTER);
+        add(execute, BorderLayout.SOUTH);
 
-        JScrollPane resultScroll = new JScrollPane(resultArea);
-        resultScroll.setBorder(new TitledBorder("Results"));
-
-        centerPanel.add(testScroll);
-        centerPanel.add(resultScroll);
-
-        add(topPanel, BorderLayout.NORTH);
-        add(centerPanel, BorderLayout.CENTER);
+        uploadSub.addActionListener(this::uploadSubmission);
+        uploadAns.addActionListener(this::uploadAnswer);
+        execute.addActionListener(this::executeTests);
     }
 
-    private void attachListeners() {
-        uploadButton.addActionListener(this::onUpload);
-        deleteButton.addActionListener(this::onDelete);
-        executeButton.addActionListener(this::onExecute);
-    }
+    private void attachListeners() {}
 
-    // ===== button actions =====
-
-    private void onUpload(ActionEvent e) {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Select student's .java file");
-        int result = chooser.showOpenDialog(this);
-
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File f = chooser.getSelectedFile();
+    private void uploadSubmission(ActionEvent e) {
+        JFileChooser fc = new JFileChooser();
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
             if (!f.getName().endsWith(".java")) {
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Please select a .java file.",
-                        "Invalid file",
-                        JOptionPane.WARNING_MESSAGE
-                );
+                JOptionPane.showMessageDialog(this, "Must select .java file");
                 return;
             }
             coordinator.setCurrentProgram(f);
-            selectedFileLabel.setText(f.getAbsolutePath());
-            resultArea.setText("");
+            submissionLabel.setText(f.getAbsolutePath());
         }
     }
 
-    private void onDelete(ActionEvent e) {
-        coordinator.setCurrentProgram(null);
-        selectedFileLabel.setText("No submission selected.");
-        resultArea.setText("");
+    private void uploadAnswer(ActionEvent e) {
+        JFileChooser fc = new JFileChooser();
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File f = fc.getSelectedFile();
+            try {
+                answerText = Files.readString(f.toPath(), StandardCharsets.UTF_8);
+                answerArea.setText(answerText);
+                answerLabel.setText(f.getAbsolutePath());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Cannot read file");
+            }
+        }
     }
 
-    private void onExecute(ActionEvent e) {
+    private void executeTests(ActionEvent e) {
         resultArea.setText("");
 
         if (coordinator.getCurrentProgram() == null) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "No submission selected. Please upload a .java file.",
-                    "No file",
-                    JOptionPane.WARNING_MESSAGE
-            );
+            resultArea.setText("No submission selected.");
+            return;
+        }
+        if (answerText == null) {
+            resultArea.setText("No answer file selected.");
             return;
         }
 
-        // 1. Compile
-        StringBuilder compileLog = new StringBuilder();
-        boolean ok = coordinator.compileCurrentProgram(compileLog);
-        appendResult(compileLog.toString());
+        StringBuilder log = new StringBuilder();
+        boolean pass = coordinator.compileRunCheck(answerText, log);
 
-        if (!ok) {
-            appendResult("\nCompilation failed. Fix errors and try again.\n");
-            return;
-        }
-
-        // 2. Parse test suite from text area
-        TestSuit suite = coordinator.parseTestSuite("GUI Suite", testSuiteArea.getText());
-
-        if (suite.getTestCases().size() == 0) {
-            appendResult("No valid tests found in test suite.\n");
-            return;
-        }
-
-        // 3. Run tests
-        String runLog = coordinator.runTests(suite);
-        appendResult("\n" + runLog);
+        resultArea.setText(log.toString() + "\nFinal Result: " + (pass ? "PASS" : "FAIL"));
     }
-
-    private void appendResult(String s) {
-        resultArea.append(s);
-        resultArea.setCaretPosition(resultArea.getDocument().getLength());
-    }
-
-    // ===== main =====
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new UI().setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> new UI().setVisible(true));
     }
 }
-
