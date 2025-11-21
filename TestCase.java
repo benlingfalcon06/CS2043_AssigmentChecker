@@ -12,23 +12,30 @@ import java.util.Scanner;
  ***************************************************/
 public class TestCase
 {
-    private ArrayList<String> expout;
+    private String expout;
     private String title;
     private ArrayList<String> input;
     
-    public static void create(String title1, String input1, String expout1)
+    public TestCase(String title1, File input1, File expout1)
     {
-        File test = new File(title1);
+        //use teams message to refine the code before the end of friday
+        //input is a txt file
+        //expout is a txt file
+        //i wanna read the files into this object and save its name as title
         input = new ArrayList<>();
-
-        Scanner fileData = new Scanner(test);
+        Scanner fileData = new Scanner(input1);
 
         while(fileData.hasNextLine())
         {
             input.add(fileData.nextLine());
         }
 
-
+        //This is for the expected oup put
+        Scanner fileout = new Scanner(expout1)
+        while(fileout.hasNextLine())
+        {
+            expout = fileout.nextLine()
+        }
     }
     
     //For test
