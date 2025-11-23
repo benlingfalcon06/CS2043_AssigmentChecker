@@ -1,23 +1,18 @@
 import java.util.ArrayList;
 import java.util.List;
 
-public class ListOfTestCase {
-    private final List<TestCase> cases = new ArrayList<>();
+public class ListOfTestSuites {
+    private final List<TestSuit> suites = new ArrayList<>();
 
-    public void add(TestCase tc) {
-        cases.add(tc);
+    public void add(TestSuit ts) 
+    {
+        suites.add(ts); 
     }
-
-    public int size() {
-        return cases.size();
+    public TestSuit get(int i) 
+    { 
+        return suites.get(i); 
     }
-
-    public TestCase get(int index) {
-        return cases.get(index);
-    }
-
-    public List<TestCase> asList() {
-        return cases;
+    public int size() 
+    { return suites.size(); 
     }
 }
-
