@@ -17,7 +17,7 @@ public class TestSuite
     public void addTestCase(TestCase tc) 
     {
         testCases.add(tc);
-    }
+    } 
 
     // Req FR-1.1 – remove a test case from the suite
     public void removeTestCase(TestCase tc) 
