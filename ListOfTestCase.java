@@ -3,7 +3,7 @@ public class ListOfTestCase
     private final List<TestCase> cases = new ArrayList<>();
 
     // Req FR-1.1 – add a new test case to the test set
-    public void add(TestCase tc) 
+    public void add(TestCase tc)  
     {
         if (tc == null) throw new IllegalArgumentException("TestCase cannot be null");
         cases.add(tc);
