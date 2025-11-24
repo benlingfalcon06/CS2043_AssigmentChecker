@@ -1,45 +1,22 @@
-import java.lang.reflect.Array;
-import java.util.ArrayList;
+public class TestSuit {
+    private final String name;
+    private final ListOfTestCase testCases;
 
-/*********************************************************************************
- * This class defines test suites for grouping multiple test cases and addding them
- * 
- * author: Atharva Naik
- * Version: 1.0
- * insitally created:  Novemeber 18, 2025
- ******************************************************************************/
-
-public class TestSuit
-{
-    // Instance Variables
-    private String name;
-    private ListOfTestCases testCases = new ListOfTestCases();
-    
-    // Constructor
-    public TestSuite(String name) 
-    {
+    public TestSuit(String name, ListOfTestCase testCases) {
         this.name = name;
+        this.testCases = testCases;
     }
 
-    // Method to add test case to the test suite
-    public void addTestCase(TestCase tc) 
-    {
-        testCases.add(tc);
+    public String getName() {
+        return name;
     }
 
-    public void removeTestCase(TestCase tc) 
-    {
-        testCases.remove(tc);
-    }
-
-
-    // Getter for test cases
-    public ListOfTestCases getTestCases() 
-    {
+    public ListOfTestCase getTestCases() {
         return testCases;
     }
 
-
-
-
+    @Override
+    public String toString() {
+        return "TestSuit{" + name + ", cases=" + testCases.size() + "}";
+    }
 }
