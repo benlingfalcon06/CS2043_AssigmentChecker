@@ -2,10 +2,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ListOfTestCase {
-    private final List<TestCase> cases = new ArrayList<>();
+    private final List<TestCase> cases;
 
-    public void add(TestCase tc) {
-        cases.add(tc);
+    public ListOfTestCase() {
+        this.cases = new ArrayList<>();
+    }
+
+    public void add(TestCase t) {
+        cases.add(t);
     }
 
     public int size() {
@@ -18,6 +22,15 @@ public class ListOfTestCase {
 
     public List<TestCase> asList() {
         return cases;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        for (TestCase tc : cases) {
+            sb.append(tc.toString()).append(System.lineSeparator());
+        }
+        return sb.toString();
     }
 }
 
