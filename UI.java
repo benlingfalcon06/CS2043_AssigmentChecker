@@ -1,123 +1,171 @@
-import javax.swing.*;
-import java.awt.*;
-/***************************************************88
- * UI Class for Test Runner Application
+/*********************************************************************************
+ * UI
  * 
- * author: Atharva Naik
- * Date: November 19, 2025
- * 
- */
+ * author: Farbod Mosalaei
+ * Version: 1.0
+ * insitally created:  Novemeber 20, 2025
+ ******************************************************************************/
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 
-public class UI extends JFrame 
-{
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
-    private Coordinator coordinator;
+public class UI extends Application {
 
-    private JComboBox<String> programList;
-    private JComboBox<String> suiteList;
-    private JTextArea output;
+    private final Coordinator coordinator = new Coordinator();
 
-    public UI(Coordinator coordinator) 
-    {
-        this.coordinator = coordinator;
+    // Input / expected files
+    private Label inputFileLabel;
+    private Label expectedFileLabel;
+    private String inputText = null;
+    private String expectedOutputText = null;
 
-        setTitle("Test Runner UI");
-        setSize(600, 400);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
+    // Root folder + log
+    private Label rootFolderLabel;
+    private File rootFolder;
+    private TextArea logArea;
 
-        ///////////////////////////////////////////
-        // TOP PANEL (Buttons)
-        ///////////////////////////////////////////
-        JPanel topPanel = new JPanel();
-        JButton btnLoadPrograms = new JButton("List Programs");
-        JButton btnLoadSuites = new JButton("List Test Suites");
-        JButton btnRun = new JButton("Run Tests");
+    @Override
+    public void start(Stage primaryStage) {
+        primaryStage.setTitle("Assignment Checker");
 
-        topPanel.add(btnLoadPrograms);
-        topPanel.add(btnLoadSuites);
-        topPanel.add(btnRun);
+        // ----- Input file selection -----
+        inputFileLabel = new Label("No input file selected.");
+        Button loadInputButton = new Button("Load Input File");
+        loadInputButton.setOnAction(e -> onLoadInputFile(primaryStage));
 
-        add(topPanel, BorderLayout.NORTH);
+        HBox inputBox = new HBox(10, new Label("Input File:"), inputFileLabel, loadInputButton);
+        inputBox.setAlignment(Pos.CENTER_LEFT);
 
-        ///////////////////////////////////////////
-        // MIDDLE PANEL (Dropdowns)
-        ///////////////////////////////////////////
-        JPanel middlePanel = new JPanel(new GridLayout(2, 2));
+        // ----- Expected output file -----
+        expectedFileLabel = new Label("No expected output file selected.");
+        Button loadExpectedButton = new Button("Load Expected Output File");
+        loadExpectedButton.setOnAction(e -> onLoadExpectedFile(primaryStage));
 
-        middlePanel.add(new JLabel("Select Program:"));
-        programList = new JComboBox<>();
-        middlePanel.add(programList);
+        HBox expectedBox = new HBox(10, new Label("Expected Output File:"), expectedFileLabel, loadExpectedButton);
+        expectedBox.setAlignment(Pos.CENTER_LEFT);
 
-        middlePanel.add(new JLabel("Select Test Suite:"));
-        suiteList = new JComboBox<>();
-        middlePanel.add(suiteList);
+        // ----- Root folder selection -----
+        rootFolderLabel = new Label("No root folder selected.");
+        Button chooseRootButton = new Button("Choose Root Folder");
+        chooseRootButton.setOnAction(e -> onChooseRootFolder(primaryStage));
 
-        add(middlePanel, BorderLayout.CENTER);
+        HBox rootBox = new HBox(10, new Label("Root Folder:"), rootFolderLabel, chooseRootButton);
+        rootBox.setAlignment(Pos.CENTER_LEFT);
 
-        ///////////////////////////////////////////
-        // OUTPUT AREA
-        ///////////////////////////////////////////
-        output = new JTextArea();
-        output.setEditable(false);
-        add(new JScrollPane(output), BorderLayout.SOUTH);
+        // ----- Execution log -----
+        logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setPrefRowCount(20);
+        logArea.setPromptText("Execution log will appear here.");
 
-        ///////////////////////////////////////////
-        // BUTTON ACTIONS
-        ///////////////////////////////////////////
+        // ----- Execute button -----
+        Button executeButton = new Button("Execute");
+        executeButton.setOnAction(e -> onExecute());
 
-        // Load programs into dropdown
-        btnLoadPrograms.addActionListener(e -> {
-            programList.removeAllItems();
-            var programs = coordinator.getPrograms().getAll();
-            for (Program p : programs) {
-                programList.addItem(p.getFolderPath());
-            }
-            output.setText("Programs loaded.");
-        });
+        // ----- Layout -----
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(15));
 
-        // Load suites into dropdown
-        btnLoadSuites.addActionListener(e -> {
-            suiteList.removeAllItems();
-            var suites = coordinator.getSuites().getAll();
-            for (TestSuite ts : suites) {
-                suiteList.addItem(ts.getName());
-            }
-            output.setText("Test suites loaded.");
-        });
+        root.getChildren().addAll(
+                new Label("Load Files:"),
+                inputBox,
+                expectedBox,
+                new Separator(),
 
-        // RUN button
-        btnRun.addActionListener(e -> runSelected());
+                new Label("Select Root Folder:"),
+                rootBox,
+                executeButton,
+                new Separator(),
 
-        setVisible(true);
+                new Label("Execution Log:"),
+                logArea
+        );
+
+        Scene scene = new Scene(root, 900, 600);
+        primaryStage.setScene(scene);
+        primaryStage.show();
+
+        coordinator.createEmptyTestSuite("DefaultSuite");
     }
 
-    private void runSelected() {
+    // -------------------- Event Handlers --------------------
 
-        int pIndex = programList.getSelectedIndex();
-        int sIndex = suiteList.getSelectedIndex();
+    private void onLoadInputFile(Stage stage) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select input.txt");
+        File file = chooser.showOpenDialog(stage);
+        if (file == null) return;
 
-        if (pIndex < 0 || sIndex < 0) {
-            output.setText("Please select both a Program and a Test Suite.");
+        try {
+            inputText = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            inputFileLabel.setText(file.getAbsolutePath());
+        } catch (Exception e) {
+            showAlert("Error reading input file: " + e.getMessage());
+        }
+    }
+
+    private void onLoadExpectedFile(Stage stage) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select expected_output.txt");
+        File file = chooser.showOpenDialog(stage);
+        if (file == null) return;
+
+        try {
+            expectedOutputText = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            expectedFileLabel.setText(file.getAbsolutePath());
+        } catch (Exception e) {
+            showAlert("Error reading expected output file: " + e.getMessage());
+        }
+    }
+
+    private void onChooseRootFolder(Stage stage) {
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select Root Folder (program subfolders)");
+        File folder = chooser.showDialog(stage);
+        if (folder != null) {
+            rootFolder = folder;
+            rootFolderLabel.setText(folder.getAbsolutePath());
+        }
+    }
+
+    private void onExecute() {
+        logArea.clear();
+
+        if (rootFolder == null) {
+            showAlert("Please choose a root folder.");
+            return;
+        }
+        if (inputText == null) {
+            showAlert("Please load an input file first.");
+            return;
+        }
+        if (expectedOutputText == null) {
+            showAlert("Please load the expected output file first.");
             return;
         }
 
-        Program p = coordinator.getPrograms().getAll().get(pIndex);
-        TestSuite suite = coordinator.getSuites().getAll().get(sIndex);
+        String result = coordinator.executeInputExpected(rootFolder, inputText, expectedOutputText);
+        logArea.setText(result);
+    }
 
-        StringBuilder results = new StringBuilder();
-        results.append("Running ").append(suite.getName()).append("...\n");
+    private void showAlert(String msg) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setHeaderText(null);
+        alert.setContentText(msg);
+        alert.showAndWait();
+    }
 
-        for (TestCase tc : suite.getTestCases().getAll()) 
-        {
-            String actual = p.runOnInput(tc.getInput());
-            boolean pass = tc.compareOutput(actual);
-            results.append(tc.getName())
-                    .append(": ")
-                    .append(pass ? "PASS" : "FAIL")
-                    .append("\n");
-        }
-
-        output.setText(results.toString());
+    public static void main(String[] args) {
+        launch(args);
     }
 }
