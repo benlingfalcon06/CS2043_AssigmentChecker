@@ -1,10 +1,7 @@
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,12 +80,10 @@ public class Coordinator {
     public void uploadTestCasesToSuite(String suiteName, String text) {
         TestSuit suite = listOfTestSuites.getSuite(suiteName);
         if (suite == null) {
-            // Create new suite if doesn't exist
             loadTestCasesFromText(suiteName, text);
             return;
         }
 
-        // Parse and add to existing suite
         String[] lines = text.split("\\R");
         for (String line : lines) {
             String trimmed = line.trim();
@@ -157,7 +152,7 @@ public class Coordinator {
             Process p = pb.start();
 
             try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(p.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = r.readLine()) != null) {
                     log.append(line).append("\n");
@@ -196,14 +191,14 @@ public class Coordinator {
 
         try (OutputStream os = p.getOutputStream()) {
             if (stdin != null && !stdin.isEmpty()) {
-                os.write(stdin.getBytes(StandardCharsets.UTF_8));
+                os.write(stdin.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             }
             os.flush();
         }
 
         StringBuilder out = new StringBuilder();
         try (BufferedReader r = new BufferedReader(
-                new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(p.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
             while ((line = r.readLine()) != null) {
                 out.append(line).append("\n");
@@ -212,7 +207,7 @@ public class Coordinator {
 
         StringBuilder err = new StringBuilder();
         try (BufferedReader r = new BufferedReader(
-                new InputStreamReader(p.getErrorStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(p.getErrorStream(), java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
             while ((line = r.readLine()) != null) {
                 err.append(line).append("\n");
@@ -279,6 +274,9 @@ public class Coordinator {
             if (!compileProgram(program, log)) {
                 log.append("❌ Skipping execution due to compilation failure.\n");
                 program.setCompiled(false);
+                
+                // Store compilation failure result
+                suite.storeProgramResult(program.getName(), false, 0, 0);
                 continue;
             }
 
@@ -323,6 +321,9 @@ public class Coordinator {
 
             // Store results in program
             program.setTestResults(passed, failed);
+            
+            // Store results in suite
+            suite.storeProgramResult(program.getName(), true, passed, failed);
         }
 
         // Update suite statistics
@@ -348,6 +349,13 @@ public class Coordinator {
             } else {
                 log.append("\n").append(program.getName()).append(": Compilation Failed ❌\n");
             }
+        }
+        
+        // Save the result to disk
+        if (suite.saveResults()) {
+            log.append("\n✓ Results saved successfully to test_results/").append(suiteName).append("_[timestamp].txt\n");
+        } else {
+            log.append("\n⚠ Warning: Could not save results to disk.\n");
         }
 
         return log.toString();
