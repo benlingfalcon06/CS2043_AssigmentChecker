@@ -105,60 +105,29 @@ public class Coordinator {
 
     // ---------------------- Program discovery ----------------------
 
-    public void buildProgramsFromRoot(File rootFolder, StringBuilder log) {
+        public void buildProgramsFromRoot(File rootFolder, StringBuilder log) {
         programs.asList().clear();
-
+    
         if (rootFolder == null || !rootFolder.isDirectory()) {
             log.append("Root folder is invalid.\n");
             return;
         }
-
+    
         File[] children = rootFolder.listFiles();
-        if (children == null) {
+        if (children == null || children.length == 0) {
             log.append("Root folder is empty.\n");
             return;
         }
-
-        for (File sub : children) {
-            if (!sub.isDirectory()) {
-                continue;
-            }
-
-            File[] javaFiles = sub.listFiles((dir, name) -> name.endsWith(".java"));
-            if (javaFiles == null || javaFiles.length == 0) {
-                log.append("Skipping folder '").append(sub.getName())
-                   .append("' (no .java files found).\n");
-                continue;
-            }
-
-            File mainFile = null;
-
-            // Look for the file that contains the main method
-            for (File javaFile : javaFiles) {
-                try {
-                    String content = java.nio.file.Files.readString(javaFile.toPath(), StandardCharsets.UTF_8);
-                    if (content.contains("public static void main(")) {
-                        if (mainFile == null) {
-                            mainFile = javaFile;
-                        } else {
-                            // More than one main – not expected, but handle gracefully
-                            log.append("WARNING: multiple main methods found in folder '")
-                               .append(sub.getName()).append("'. Using ")
-                               .append(mainFile.getName()).append(" and ignoring ")
-                               .append(javaFile.getName()).append(".\n");
-                        }
-                    }
-                } catch (IOException e) {
-                    log.append("Could not read file '").append(javaFile.getName())
-                       .append("' in folder '").append(sub.getName()).append("': ")
-                       .append(e.getMessage()).append("\n");
-                }
-            }
-
-            if (mainFile == null) {
-                log.append("Skipping folder '").append(sub.getName())
-                   .append("' (no main method found).\n");
-                continue;
+    
+        for (File file : children) {
+    
+            // ✅ DIRECTLY ACCEPT .java FILES IN ROOT
+            if (file.isFile() && file.getName().endsWith(".java")) {
+    
+                String className = file.getName().replace(".java", "");
+                Program p = new Program(className, file);
+                programs.add(p);
+                log.append("Found program: ").append(p.getName()).append("\n");
             }
 
             // Class name = file name without .java
@@ -174,6 +143,7 @@ public class Coordinator {
                .append(" (file ").append(mainFile.getName()).append(")\n");
         }
     }
+
 
     // ---------------------- Compilation & execution helpers ----------------------
 
@@ -401,4 +371,89 @@ public class Coordinator {
     public ListOfPrograms getPrograms() {
         return programs;
     }
+    
+     // ----------------------------------------------------------
+    // Reload a single result file
+    // ----------------------------------------------------------
+    public String reloadResults(Path resultFile) {
+        StringBuilder log = new StringBuilder();
+
+        if (resultFile == null) {
+            return "No result file selected.\n";
+        }
+
+        log.append("Reloading results from: ")
+           .append(resultFile.toAbsolutePath())
+           .append(System.lineSeparator())
+           .append(System.lineSeparator());
+
+        try {
+            java.util.List<String> lines =
+                    Files.readAllLines(resultFile, java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : lines) {
+                log.append(line).append(System.lineSeparator());
+            }
+        } catch (IOException e) {
+            log.append("Error reading result file: ")
+               .append(e.getMessage())
+               .append(System.lineSeparator());
+        }
+
+        return log.toString();
+    }
+
+    // ----------------------------------------------------------
+    // Compare two result files line by line
+    // ----------------------------------------------------------
+    public String compareResultFiles(Path file1, Path file2) {
+        StringBuilder log = new StringBuilder();
+
+        if (file1 == null || file2 == null) {
+            return "Both result files must be selected.\n";
+        }
+
+        log.append("Comparing result files:")
+           .append(System.lineSeparator());
+        log.append("  File 1: ").append(file1.toAbsolutePath())
+           .append(System.lineSeparator());
+        log.append("  File 2: ").append(file2.toAbsolutePath())
+           .append(System.lineSeparator())
+           .append(System.lineSeparator());
+
+        try {
+            java.util.List<String> lines1 =
+                    Files.readAllLines(file1, java.nio.charset.StandardCharsets.UTF_8);
+            java.util.List<String> lines2 =
+                    Files.readAllLines(file2, java.nio.charset.StandardCharsets.UTF_8);
+
+            int maxLines = Math.max(lines1.size(), lines2.size());
+            boolean anyDifference = false;
+
+            for (int i = 0; i < maxLines; i++) {
+                String l1 = (i < lines1.size()) ? lines1.get(i) : "";
+                String l2 = (i < lines2.size()) ? lines2.get(i) : "";
+
+                if (!l1.equals(l2)) {
+                    anyDifference = true;
+                    log.append("Line ").append(i + 1).append(" differs:")
+                       .append(System.lineSeparator());
+                    log.append("  < ").append(l1).append(System.lineSeparator());
+                    log.append("  > ").append(l2).append(System.lineSeparator())
+                       .append(System.lineSeparator());
+                }
+            }
+
+            if (!anyDifference) {
+                log.append("The two result files are identical.")
+                   .append(System.lineSeparator());
+            }
+        } catch (IOException e) {
+            log.append("Error reading result files: ")
+               .append(e.getMessage())
+               .append(System.lineSeparator());
+        }
+
+        return log.toString();
+    }
 }
+
