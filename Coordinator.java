@@ -1,7 +1,10 @@
-import java.io.*;
-import java.nio.file.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -122,19 +125,53 @@ public class Coordinator {
             }
 
             File[] javaFiles = sub.listFiles((dir, name) -> name.endsWith(".java"));
-            if (javaFiles != null && javaFiles.length > 0) {
-                File javaFile = javaFiles[0];
-                String className = javaFile.getName();
-                if (className.endsWith(".java")) {
-                    className = className.substring(0, className.length() - 5);
-                }
-                Program p = new Program(className, javaFile);
-                programs.add(p);
-                log.append("Found program: ").append(p.toString()).append("\n");
-            } else {
+            if (javaFiles == null || javaFiles.length == 0) {
                 log.append("Skipping folder '").append(sub.getName())
-                   .append("' (no .java file found).\n");
+                   .append("' (no .java files found).\n");
+                continue;
             }
+
+            File mainFile = null;
+
+            // Look for the file that contains the main method
+            for (File javaFile : javaFiles) {
+                try {
+                    String content = java.nio.file.Files.readString(javaFile.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains("public static void main(")) {
+                        if (mainFile == null) {
+                            mainFile = javaFile;
+                        } else {
+                            // More than one main – not expected, but handle gracefully
+                            log.append("WARNING: multiple main methods found in folder '")
+                               .append(sub.getName()).append("'. Using ")
+                               .append(mainFile.getName()).append(" and ignoring ")
+                               .append(javaFile.getName()).append(".\n");
+                        }
+                    }
+                } catch (IOException e) {
+                    log.append("Could not read file '").append(javaFile.getName())
+                       .append("' in folder '").append(sub.getName()).append("': ")
+                       .append(e.getMessage()).append("\n");
+                }
+            }
+
+            if (mainFile == null) {
+                log.append("Skipping folder '").append(sub.getName())
+                   .append("' (no main method found).\n");
+                continue;
+            }
+
+            // Class name = file name without .java
+            String className = mainFile.getName();
+            if (className.endsWith(".java")) {
+                className = className.substring(0, className.length() - 5);
+            }
+
+            Program p = new Program(className, mainFile);
+            programs.add(p);
+            log.append("Found program in folder '").append(sub.getName())
+               .append("': main class ").append(className)
+               .append(" (file ").append(mainFile.getName()).append(")\n");
         }
     }
 

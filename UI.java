@@ -4,7 +4,7 @@
  * author: Farbod Mosalaei
  * Version: 2.0
  * initially created:  November 20, 2025
- * updated: December 4, 2025 - Test Suite Management and Execution
+ * updated: December 8, 2025 - Test Suite Management and Execution
  ******************************************************************************/
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -17,6 +17,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
@@ -40,8 +41,8 @@ public class UI extends Application {
         mainPane.setPadding(new Insets(15));
 
         // ----- Header -----
-        Label headerLabel = new Label("Assignment Checker - Test Suite Mode");
-        headerLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        Label headerLabel = new Label("Assignment Checker - Test Suite Manager");
+        headerLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
 
         // ----- Test Suite Management Section -----
         Button createTestSuiteButton = new Button("Create Test Suite");
@@ -59,25 +60,22 @@ public class UI extends Application {
         Button deleteTestSuiteButton = new Button("Delete Suite");
         deleteTestSuiteButton.setOnAction(e -> onDeleteTestSuite());
 
-        HBox testSuiteBox = new HBox(10, createTestSuiteButton, addTestCaseButton, 
-                                      manageTestCasesButton, viewTestSuitesButton, deleteTestSuiteButton);
+        Button importSuitesButton = new Button("Import Suites from Files");
+        importSuitesButton.setOnAction(e -> onImportSuitesFromFiles(primaryStage));
+
+        HBox testSuiteBox = new HBox(10, createTestSuiteButton, addTestCaseButton,
+                                     manageTestCasesButton, viewTestSuitesButton, deleteTestSuiteButton, importSuitesButton);
         testSuiteBox.setAlignment(Pos.CENTER_LEFT);
 
         // ----- Test Suite Selection and Execution -----
         Label selectSuiteLabel = new Label("Select Test Suite:");
         suiteComboBox = new ComboBox<>();
-        suiteComboBox.setPrefWidth(300);
+        suiteComboBox.setPrefWidth(250);
 
-        Button refreshSuitesButton = new Button("Refresh");
-        refreshSuitesButton.setOnAction(e -> refreshSuiteList());
-
-        // Initialize combo box
-        refreshSuiteList();
-
-        HBox suiteSelectionBox = new HBox(10, selectSuiteLabel, suiteComboBox, refreshSuitesButton);
+        HBox suiteSelectionBox = new HBox(10, selectSuiteLabel, suiteComboBox);
         suiteSelectionBox.setAlignment(Pos.CENTER_LEFT);
 
-        // ----- Root folder selection -----
+        // ----- Root Folder selection -----
         rootFolderLabel = new Label("No root folder selected.");
         Button chooseRootButton = new Button("Choose Root Folder");
         chooseRootButton.setOnAction(e -> onChooseRootFolder(primaryStage));
@@ -87,7 +85,7 @@ public class UI extends Application {
 
         // ----- Execute with Test Suite button -----
         Button executeWithSuiteButton = new Button("Run Test Suite");
-        executeWithSuiteButton.setStyle("-fx-font-size: 16px; -fx-padding: 12px 30px; -fx-background-color: #4CAF50; -fx-text-fill: white;");
+        executeWithSuiteButton.setStyle("-fx-font-size: 16px; -fx-padding: 10px 30px; -fx-background-color: #4CAF50; -fx-text-fill: white;");
         executeWithSuiteButton.setOnAction(e -> onExecuteWithTestSuite());
 
         HBox executeBox = new HBox(executeWithSuiteButton);
@@ -98,10 +96,14 @@ public class UI extends Application {
         logArea.setEditable(false);
         logArea.setPrefRowCount(25);
         logArea.setPromptText("Test suite execution log will appear here...");
-        logArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 12px;");
+        logArea.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; -fx-font-size: 12px;");
 
-        // ----- Layout -----
-        mainPane.getChildren().addAll(
+        // Wrap in scroll pane
+        ScrollPane logScroll = new ScrollPane(logArea);
+        logScroll.setFitToWidth(true);
+        logScroll.setFitToHeight(true);
+
+        VBox centerBox = new VBox(10,
                 headerLabel,
                 new Separator(),
                 new Label("Test Suite Management:"),
@@ -111,15 +113,13 @@ public class UI extends Application {
                 suiteSelectionBox,
                 rootBox,
                 executeBox,
-                new Separator(),
                 new Label("Execution Log:"),
-                logArea
+                logScroll
         );
 
-        ScrollPane scrollPane = new ScrollPane(mainPane);
-        scrollPane.setFitToWidth(true);
+        mainPane.getChildren().add(centerBox);
 
-        Scene scene = new Scene(scrollPane, 1000, 750);
+        Scene scene = new Scene(mainPane, 1000, 750);
         primaryStage.setScene(scene);
         primaryStage.show();
 
@@ -134,12 +134,20 @@ public class UI extends Application {
         String selected = suiteComboBox.getValue();
         suiteComboBox.getItems().clear();
         suiteComboBox.getItems().addAll(coordinator.getAllTestSuiteNames());
-        
+
         if (selected != null && suiteComboBox.getItems().contains(selected)) {
             suiteComboBox.setValue(selected);
         } else if (!suiteComboBox.getItems().isEmpty()) {
             suiteComboBox.setValue(suiteComboBox.getItems().get(0));
         }
+    }
+
+    private void showAlert(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Assignment Checker");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     // -------------------- Event Handlers --------------------
@@ -158,49 +166,53 @@ public class UI extends Application {
         // Dialog to get test suite name
         Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Create Test Suite");
-        dialog.setHeaderText("Create a new test suite");
+        dialog.setHeaderText("Create a new Test Suite");
 
-        ButtonType createButtonType = new ButtonType("Create", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(createButtonType, ButtonType.CANCEL);
+        ButtonType createButton = new ButtonType("Create", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(createButton, ButtonType.CANCEL);
+
+        TextField nameField = new TextField();
+        nameField.setPromptText("Suite Name");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
-
-        TextField nameField = new TextField();
-        nameField.setPromptText("e.g., Assignment1Tests");
-
-        grid.add(new Label("Test Suite Name:"), 0, 0);
+        grid.add(new Label("Suite Name:"), 0, 0);
         grid.add(nameField, 1, 0);
 
         dialog.getDialogPane().setContent(grid);
 
-        // Focus on name field
-        javafx.application.Platform.runLater(() -> nameField.requestFocus());
-
         dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == createButtonType) {
-                return nameField.getText();
+            if (dialogButton == createButton) {
+                return nameField.getText().trim();
             }
             return null;
         });
 
         Optional<String> result = dialog.showAndWait();
-        if (result.isPresent() && !result.get().trim().isEmpty()) {
-            String suiteName = result.get().trim();
-            
-            // Check if suite already exists
-            if (coordinator.getAllTestSuiteNames().contains(suiteName)) {
-                showAlert("A test suite with name '" + suiteName + "' already exists.");
-                return;
+        result.ifPresent(name -> {
+            if (name.isEmpty()) {
+                showAlert("Suite name cannot be empty.");
+            } else {
+                coordinator.createEmptyTestSuite(name);
+                refreshSuiteList();
+                showAlert("Test suite '" + name + "' created successfully!\nNow add test cases to it.");
+                logArea.appendText("✓ Created test suite: " + name + "\n");
             }
+        });
+    }
 
-            coordinator.createEmptyTestSuite(suiteName);
-            refreshSuiteList();
-            suiteComboBox.setValue(suiteName);
-            showAlert("Test suite '" + suiteName + "' created successfully!\nNow add test cases to it.");
-            logArea.appendText("✓ Created test suite: " + suiteName + "\n");
+    private static class TestCaseInput {
+        final String suiteName;
+        final String input;
+        final String expectedOutput;
+        final boolean addMore;
+
+        TestCaseInput(String suiteName, String input, String expectedOutput, boolean addMore) {
+            this.suiteName = suiteName;
+            this.input = input;
+            this.expectedOutput = expectedOutput;
+            this.addMore = addMore;
         }
     }
 
@@ -224,25 +236,23 @@ public class UI extends Application {
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.setPadding(new Insets(20, 10, 10, 10));
 
-        ComboBox<String> suiteChoice = new ComboBox<>();
-        suiteChoice.getItems().addAll(suiteNames);
-        suiteChoice.setValue(suiteComboBox.getValue() != null ? suiteComboBox.getValue() : suiteNames.get(0));
-        suiteChoice.setPrefWidth(300);
+        ComboBox<String> suiteCombo = new ComboBox<>();
+        suiteCombo.getItems().addAll(suiteNames);
+        if (!suiteNames.isEmpty()) {
+            suiteCombo.setValue(suiteNames.get(0));
+        }
 
         TextArea inputArea = new TextArea();
-        inputArea.setPromptText("Enter the input for the program\ne.g., 1 2 3\nor multiple lines:\n1\n2\n3");
-        inputArea.setPrefRowCount(5);
-        inputArea.setPrefColumnCount(40);
+        inputArea.setPromptText("Program input here...");
+        inputArea.setPrefRowCount(3);
 
         TextArea expectedArea = new TextArea();
-        expectedArea.setPromptText("Enter the expected output\ne.g., 6");
-        expectedArea.setPrefRowCount(5);
-        expectedArea.setPrefColumnCount(40);
+        expectedArea.setPromptText("Expected output here...");
+        expectedArea.setPrefRowCount(3);
 
         grid.add(new Label("Test Suite:"), 0, 0);
-        grid.add(suiteChoice, 1, 0);
+        grid.add(suiteCombo, 1, 0);
         grid.add(new Label("Input:"), 0, 1);
         grid.add(inputArea, 1, 1);
         grid.add(new Label("Expected Output:"), 0, 2);
@@ -252,32 +262,38 @@ public class UI extends Application {
 
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == addButtonType || dialogButton == addMoreButtonType) {
-                return new TestCaseInput(
-                    suiteChoice.getValue(),
-                    inputArea.getText(),
-                    expectedArea.getText(),
-                    dialogButton == addMoreButtonType
-                );
+                String suiteName = suiteCombo.getValue();
+                String input = inputArea.getText().trim();
+                String expected = expectedArea.getText().trim();
+
+                if (suiteName == null || suiteName.isEmpty()) {
+                    showAlert("Please select a test suite.");
+                    return null;
+                }
+                if (input.isEmpty() || expected.isEmpty()) {
+                    showAlert("Input and Expected Output cannot be empty.");
+                    return null;
+                }
+                return new TestCaseInput(suiteName, input, expected, dialogButton == addMoreButtonType);
             }
             return null;
         });
 
         boolean addMore = true;
+
         while (addMore) {
             Optional<TestCaseInput> result = dialog.showAndWait();
-            
             if (result.isPresent()) {
                 TestCaseInput input = result.get();
-                
-                if (input.input.trim().isEmpty() || input.expectedOutput.trim().isEmpty()) {
-                    showAlert("Both input and expected output must be provided.");
+                if (input == null) {
+                    // Invalid input (already handled by showAlert)
                     if (!input.addMore) break;
                     continue;
                 }
 
                 coordinator.addTestCaseToSuite(input.suiteName, input.input, input.expectedOutput);
                 logArea.appendText("✓ Added test case to suite: " + input.suiteName + "\n");
-                
+
                 if (input.addMore) {
                     // Clear fields for next test case
                     inputArea.clear();
@@ -301,13 +317,9 @@ public class UI extends Application {
             return;
         }
 
-        // Dialog to select test suite
-        ChoiceDialog<String> suiteDialog = new ChoiceDialog<>(
-            suiteComboBox.getValue() != null ? suiteComboBox.getValue() : suiteNames.get(0), 
-            suiteNames
-        );
+        ChoiceDialog<String> suiteDialog = new ChoiceDialog<>(suiteNames.get(0), suiteNames);
         suiteDialog.setTitle("Manage Test Cases");
-        suiteDialog.setHeaderText("Select a test suite to manage:");
+        suiteDialog.setHeaderText("Select a test suite to manage");
         suiteDialog.setContentText("Test Suite:");
 
         Optional<String> suiteResult = suiteDialog.showAndWait();
@@ -315,31 +327,18 @@ public class UI extends Application {
             return;
         }
 
-        String selectedSuite = suiteResult.get();
-        TestSuit suite = coordinator.getListOfTestSuites().getSuite(selectedSuite);
+        String suiteName = suiteResult.get();
+        TestSuit suite = coordinator.getListOfTestSuites().getSuite(suiteName);
 
         if (suite == null) {
-            showAlert("Test suite not found.");
+            showAlert("Selected suite not found.");
             return;
         }
 
-        if (suite.getTestCases().size() == 0) {
-            showAlert("This test suite has no test cases yet.\nUse 'Add Test Case to Suite' to add some.");
-            return;
-        }
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Manage Test Cases - " + suiteName);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CLOSE);
 
-        // Create test case management dialog
-        Dialog<Void> manageDialog = new Dialog<>();
-        manageDialog.setTitle("Manage Test Cases - " + selectedSuite);
-        manageDialog.setHeaderText("Select test cases to view, edit, or delete");
-
-        ButtonType closeButtonType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        manageDialog.getDialogPane().getButtonTypes().add(closeButtonType);
-
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(10));
-
-        // List view with test cases
         ListView<String> testCaseListView = new ListView<>();
         testCaseListView.setPrefHeight(300);
         testCaseListView.setPrefWidth(600);
@@ -347,10 +346,10 @@ public class UI extends Application {
         // Populate list view
         for (int i = 0; i < suite.getTestCases().size(); i++) {
             TestCase tc = suite.getTestCases().get(i);
-            String display = String.format("%d. Input: %s => Expected: %s", 
-                i + 1, 
-                tc.getInput().replace("\n", "\\n").substring(0, Math.min(50, tc.getInput().length())),
-                tc.getExpectedOutput().replace("\n", "\\n").substring(0, Math.min(50, tc.getExpectedOutput().length()))
+            String display = String.format("%d. Input: %s => Expected: %s",
+                    i + 1,
+                    tc.getInput().replace("\n", "\\n").substring(0, Math.min(50, tc.getInput().length())),
+                    tc.getExpectedOutput().replace("\n", "\\n").substring(0, Math.min(50, tc.getExpectedOutput().length()))
             );
             testCaseListView.getItems().add(display);
         }
@@ -359,34 +358,31 @@ public class UI extends Application {
         Button viewButton = new Button("View Details");
         Button editButton = new Button("Edit");
         Button deleteButton = new Button("Delete");
-        Button deleteAllButton = new Button("Delete All");
-        deleteAllButton.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
 
-        HBox buttonBox = new HBox(10, viewButton, editButton, deleteButton, deleteAllButton);
-        buttonBox.setAlignment(Pos.CENTER);
+        HBox buttonsBox = new HBox(10, viewButton, editButton, deleteButton);
+        buttonsBox.setAlignment(Pos.CENTER);
 
-        content.getChildren().addAll(
-            new Label("Test Cases in suite '" + selectedSuite + "':"),
-            testCaseListView,
-            buttonBox
-        );
+        VBox contentBox = new VBox(10, new Label("Test Cases:"), testCaseListView, buttonsBox);
+        contentBox.setPadding(new Insets(10));
+
+        dialog.getDialogPane().setContent(contentBox);
 
         // View button action
         viewButton.setOnAction(e -> {
             int selected = testCaseListView.getSelectionModel().getSelectedIndex();
             if (selected >= 0) {
                 TestCase tc = suite.getTestCases().get(selected);
+
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Test Case Details");
                 alert.setHeaderText("Test Case #" + (selected + 1));
-                
-                TextArea detailArea = new TextArea();
+
+                TextArea detailArea = new TextArea(tc.toDetailedString());
                 detailArea.setEditable(false);
                 detailArea.setWrapText(true);
-                detailArea.setText("Input:\n" + tc.getInput() + "\n\nExpected Output:\n" + tc.getExpectedOutput());
                 detailArea.setPrefRowCount(10);
                 detailArea.setPrefColumnCount(50);
-                
+
                 alert.getDialogPane().setContent(detailArea);
                 alert.showAndWait();
             } else {
@@ -399,27 +395,21 @@ public class UI extends Application {
             int selected = testCaseListView.getSelectionModel().getSelectedIndex();
             if (selected >= 0) {
                 TestCase tc = suite.getTestCases().get(selected);
-                
-                // Edit dialog
-                Dialog<TestCaseEdit> editDialog = new Dialog<>();
+
+                Dialog<TestCase> editDialog = new Dialog<>();
                 editDialog.setTitle("Edit Test Case");
                 editDialog.setHeaderText("Edit Test Case #" + (selected + 1));
-
-                ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-                editDialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+                editDialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
                 GridPane grid = new GridPane();
                 grid.setHgap(10);
                 grid.setVgap(10);
-                grid.setPadding(new Insets(20, 10, 10, 10));
 
                 TextArea inputArea = new TextArea(tc.getInput());
-                inputArea.setPrefRowCount(5);
-                inputArea.setPrefColumnCount(40);
+                inputArea.setPrefRowCount(3);
 
                 TextArea expectedArea = new TextArea(tc.getExpectedOutput());
-                expectedArea.setPrefRowCount(5);
-                expectedArea.setPrefColumnCount(40);
+                expectedArea.setPrefRowCount(3);
 
                 grid.add(new Label("Input:"), 0, 0);
                 grid.add(inputArea, 1, 0);
@@ -429,31 +419,31 @@ public class UI extends Application {
                 editDialog.getDialogPane().setContent(grid);
 
                 editDialog.setResultConverter(dialogButton -> {
-                    if (dialogButton == saveButtonType) {
-                        return new TestCaseEdit(inputArea.getText(), expectedArea.getText());
+                    if (dialogButton == ButtonType.OK) {
+                        String newInput = inputArea.getText().trim();
+                        String newExpected = expectedArea.getText().trim();
+                        if (newInput.isEmpty() || newExpected.isEmpty()) {
+                            showAlert("Input and Expected Output cannot be empty.");
+                            return null;
+                        }
+                        return new TestCase(newInput, newExpected);
                     }
                     return null;
                 });
 
-                Optional<TestCaseEdit> editResult = editDialog.showAndWait();
-                if (editResult.isPresent()) {
-                    TestCaseEdit edited = editResult.get();
-                    
-                    // Remove old and add new (since TestCase fields are final)
-                    suite.getTestCases().asList().remove(selected);
-                    suite.getTestCases().asList().add(selected, new TestCase(edited.input, edited.expectedOutput));
-                    
-                    // Update list view
-                    String display = String.format("%d. Input: %s => Expected: %s", 
-                        selected + 1, 
-                        edited.input.replace("\n", "\\n").substring(0, Math.min(50, edited.input.length())),
-                        edited.expectedOutput.replace("\n", "\\n").substring(0, Math.min(50, edited.expectedOutput.length()))
+                Optional<TestCase> editResult = editDialog.showAndWait();
+                editResult.ifPresent(newTc -> {
+                    suite.getTestCases().asList().set(selected, newTc);
+                    logArea.appendText("✓ Edited test case #" + (selected + 1) + " in suite: " + suiteName + "\n");
+
+                    // Update display
+                    String display = String.format("%d. Input: %s => Expected: %s",
+                            selected + 1,
+                            newTc.getInput().replace("\n", "\\n").substring(0, Math.min(50, newTc.getInput().length())),
+                            newTc.getExpectedOutput().replace("\n", "\\n").substring(0, Math.min(50, newTc.getExpectedOutput().length()))
                     );
                     testCaseListView.getItems().set(selected, display);
-                    
-                    showAlert("Test case updated successfully!");
-                    logArea.appendText("✓ Edited test case #" + (selected + 1) + " in suite: " + selectedSuite + "\n");
-                }
+                });
             } else {
                 showAlert("Please select a test case to edit.");
             }
@@ -464,115 +454,62 @@ public class UI extends Application {
             int selected = testCaseListView.getSelectionModel().getSelectedIndex();
             if (selected >= 0) {
                 Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-                confirm.setTitle("Confirm Delete");
-                confirm.setHeaderText("Delete Test Case #" + (selected + 1) + "?");
+                confirm.setTitle("Delete Test Case");
+                confirm.setHeaderText("Are you sure you want to delete this test case?");
                 confirm.setContentText("This action cannot be undone.");
 
                 Optional<ButtonType> confirmResult = confirm.showAndWait();
                 if (confirmResult.isPresent() && confirmResult.get() == ButtonType.OK) {
                     suite.getTestCases().asList().remove(selected);
                     testCaseListView.getItems().remove(selected);
-                    
-                    // Update numbering
-                    for (int i = 0; i < suite.getTestCases().size(); i++) {
-                        TestCase tc = suite.getTestCases().get(i);
-                        String display = String.format("%d. Input: %s => Expected: %s", 
-                            i + 1, 
-                            tc.getInput().replace("\n", "\\n").substring(0, Math.min(50, tc.getInput().length())),
-                            tc.getExpectedOutput().replace("\n", "\\n").substring(0, Math.min(50, tc.getExpectedOutput().length()))
-                        );
-                        testCaseListView.getItems().set(i, display);
-                    }
-                    
-                    showAlert("Test case deleted successfully!");
-                    logArea.appendText("✗ Deleted test case from suite: " + selectedSuite + "\n");
+                    logArea.appendText("✗ Deleted test case #" + (selected + 1) + " from suite: " + suiteName + "\n");
                 }
             } else {
                 showAlert("Please select a test case to delete.");
             }
         });
 
-        // Delete all button action
-        deleteAllButton.setOnAction(e -> {
-            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-            confirm.setTitle("Confirm Delete All");
-            confirm.setHeaderText("Delete ALL test cases from '" + selectedSuite + "'?");
-            confirm.setContentText("This will remove all " + suite.getTestCases().size() + " test cases. This action cannot be undone.");
-
-            Optional<ButtonType> confirmResult = confirm.showAndWait();
-            if (confirmResult.isPresent() && confirmResult.get() == ButtonType.OK) {
-                suite.getTestCases().asList().clear();
-                testCaseListView.getItems().clear();
-                showAlert("All test cases deleted from suite '" + selectedSuite + "'!");
-                logArea.appendText("✗ Deleted all test cases from suite: " + selectedSuite + "\n");
-            }
-        });
-
-        manageDialog.getDialogPane().setContent(content);
-        manageDialog.getDialogPane().setPrefSize(700, 500);
-        manageDialog.showAndWait();
+        dialog.showAndWait();
     }
 
     private void onViewTestSuites() {
-        List<String> suiteNames = coordinator.getAllTestSuiteNames();
-
-        if (suiteNames.isEmpty()) {
+        ListOfTestSuites suites = coordinator.getListOfTestSuites();
+        if (suites.getSuiteNames().isEmpty()) {
             showAlert("No test suites available.");
             return;
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("═══════════════════════════════════════════════════════════════════\n");
-        sb.append("                        ALL TEST SUITES                           \n");
-        sb.append("═══════════════════════════════════════════════════════════════════\n\n");
-
-        for (String suiteName : suiteNames) {
-            TestSuit suite = coordinator.getListOfTestSuites().getSuite(suiteName);
-            if (suite != null) {
-                sb.append(suite.toDetailedString());
-                sb.append("\nTest Cases:\n");
-                sb.append("───────────────────────────────────────────────────────────────────\n");
-
-                if (suite.getTestCases().size() == 0) {
-                    sb.append("  (No test cases yet)\n");
-                } else {
-                    for (int i = 0; i < suite.getTestCases().size(); i++) {
-                        TestCase tc = suite.getTestCases().get(i);
-                        sb.append(String.format("%3d. ", i + 1));
-                        sb.append(tc.toString()).append("\n");
-                    }
-                }
-                sb.append("\n");
-            }
+        sb.append("Available Test Suites:\n\n");
+        for (String name : suites.getSuiteNames()) {
+            TestSuit suite = suites.getSuite(name);
+            sb.append("- ").append(name)
+              .append(" (").append(suite.getTestCases().size()).append(" test cases)\n");
         }
+
+        TextArea area = new TextArea(sb.toString());
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefRowCount(15);
+        area.setPrefColumnCount(50);
 
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Test Suites");
-        alert.setHeaderText(null);
-
-        TextArea textArea = new TextArea(sb.toString());
-        textArea.setEditable(false);
-        textArea.setWrapText(false);
-        textArea.setPrefRowCount(28);
-        textArea.setPrefColumnCount(80);
-        textArea.setStyle("-fx-font-family: 'Courier New', monospace;");
-
-        alert.getDialogPane().setContent(textArea);
-        alert.getDialogPane().setPrefSize(900, 650);
+        alert.setHeaderText("All Test Suites");
+        alert.getDialogPane().setContent(area);
         alert.showAndWait();
     }
 
     private void onDeleteTestSuite() {
         List<String> suiteNames = coordinator.getAllTestSuiteNames();
-
         if (suiteNames.isEmpty()) {
-            showAlert("No test suites available to delete.");
+            showAlert("No test suites available.");
             return;
         }
 
         ChoiceDialog<String> dialog = new ChoiceDialog<>(suiteNames.get(0), suiteNames);
         dialog.setTitle("Delete Test Suite");
-        dialog.setHeaderText("Select a test suite to delete:");
+        dialog.setHeaderText("Select a test suite to delete");
         dialog.setContentText("Test Suite:");
 
         Optional<String> result = dialog.showAndWait();
@@ -589,6 +526,62 @@ public class UI extends Application {
                 showAlert("Test suite '" + result.get() + "' deleted successfully.");
                 logArea.appendText("✗ Deleted test suite: " + result.get() + "\n");
             }
+        }
+    }
+
+    /**
+     * Import one or more test suite definition files and turn each into a suite.
+     * Each non-empty, non-# line of the file must have the form:
+     *     input ==> expectedOutput
+     */
+    private void onImportSuitesFromFiles(Stage stage) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select Test Suite File(s)");
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Text Files", "*.txt", "*.in")
+        );
+
+        List<File> files = chooser.showOpenMultipleDialog(stage);
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+
+        int imported = 0;
+
+        for (File file : files) {
+            try {
+                String text = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+
+                // Derive suite name from file name (without extension)
+                String fileName = file.getName();
+                String suiteName;
+                int dot = fileName.lastIndexOf('.');
+                if (dot > 0) {
+                    suiteName = fileName.substring(0, dot);
+                } else {
+                    suiteName = fileName;
+                }
+
+                coordinator.loadTestCasesFromText(suiteName, text);
+                imported++;
+                if (logArea != null) {
+                    logArea.appendText("✓ Loaded test suite '" + suiteName + "' from file: "
+                                       + file.getAbsolutePath() + "\n");
+                }
+            } catch (IOException ex) {
+                if (logArea != null) {
+                    logArea.appendText("⚠ Failed to read file: " + file.getAbsolutePath()
+                                       + " (" + ex.getMessage() + ")\n");
+                }
+            }
+        }
+
+        refreshSuiteList();
+
+        if (imported > 0) {
+            showAlert("Successfully imported " + imported + " test suite file(s).");
+        } else {
+            showAlert("No test suites were imported.");
         }
     }
 
@@ -609,39 +602,6 @@ public class UI extends Application {
         logArea.appendText("Starting execution...\n\n");
         String result = coordinator.executeWithTestSuite(rootFolder, selectedSuite);
         logArea.setText(result);
-    }
-
-    private void showAlert(String msg) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setHeaderText(null);
-        alert.setContentText(msg);
-        alert.showAndWait();
-    }
-
-    // Helper class to store test case input
-    private static class TestCaseInput {
-        String suiteName;
-        String input;
-        String expectedOutput;
-        boolean addMore;
-
-        TestCaseInput(String suiteName, String input, String expectedOutput, boolean addMore) {
-            this.suiteName = suiteName;
-            this.input = input;
-            this.expectedOutput = expectedOutput;
-            this.addMore = addMore;
-        }
-    }
-
-    // Helper class for editing test cases
-    private static class TestCaseEdit {
-        String input;
-        String expectedOutput;
-
-        TestCaseEdit(String input, String expectedOutput) {
-            this.input = input;
-            this.expectedOutput = expectedOutput;
-        }
     }
 
     public static void main(String[] args) {
