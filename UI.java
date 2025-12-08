@@ -92,6 +92,16 @@ public class UI extends Application {
 
         HBox executeBox = new HBox(executeWithSuiteButton);
         executeBox.setAlignment(Pos.CENTER);
+        
+        // ----- Results tools -----
+        Button reloadResultsButton = new Button("Reload Results");
+        reloadResultsButton.setOnAction(e -> onReloadResults(primaryStage));
+
+        Button compareResultsButton = new Button("Compare Two Result Files");
+        compareResultsButton.setOnAction(e -> onCompareResultFiles(primaryStage));
+
+        HBox resultsBox = new HBox(10, reloadResultsButton, compareResultsButton);
+        resultsBox.setAlignment(Pos.CENTER_LEFT);
 
         // ----- Execution log -----
         logArea = new TextArea();
@@ -101,7 +111,7 @@ public class UI extends Application {
         logArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 12px;");
 
         // ----- Layout -----
-        mainPane.getChildren().addAll(
+                mainPane.getChildren().addAll(
                 headerLabel,
                 new Separator(),
                 new Label("Test Suite Management:"),
@@ -111,6 +121,7 @@ public class UI extends Application {
                 suiteSelectionBox,
                 rootBox,
                 executeBox,
+                resultsBox,
                 new Separator(),
                 new Label("Execution Log:"),
                 logArea
@@ -140,6 +151,46 @@ public class UI extends Application {
         } else if (!suiteComboBox.getItems().isEmpty()) {
             suiteComboBox.setValue(suiteComboBox.getItems().get(0));
         }
+    }
+    
+        // -------------------- Result file tools --------------------
+
+    private void onReloadResults(Stage owner) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select result file to reload");
+        chooser.setInitialDirectory(new File("test_results"));
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Result files", "*.txt")
+        );
+
+        File file = chooser.showOpenDialog(owner);
+        if (file != null) {
+            String logText = coordinator.reloadResults(file.toPath());
+            logArea.setText(logText);
+        }
+    }
+
+    private void onCompareResultFiles(Stage owner) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select FIRST result file");
+        chooser.setInitialDirectory(new File("test_results"));
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Result files", "*.txt")
+        );
+
+        File first = chooser.showOpenDialog(owner);
+        if (first == null) {
+            return;
+        }
+
+        chooser.setTitle("Select SECOND result file");
+        File second = chooser.showOpenDialog(owner);
+        if (second == null) {
+            return;
+        }
+
+        String logText = coordinator.compareResultFiles(first.toPath(), second.toPath());
+        logArea.setText(logText);
     }
 
     // -------------------- Event Handlers --------------------

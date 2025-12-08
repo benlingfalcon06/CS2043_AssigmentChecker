@@ -1,4 +1,3 @@
-
 public class TestCase {
     private final String input;
     private final String expectedOutput;
