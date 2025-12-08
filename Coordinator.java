@@ -102,41 +102,33 @@ public class Coordinator {
 
     // ---------------------- Program discovery ----------------------
 
-    public void buildProgramsFromRoot(File rootFolder, StringBuilder log) {
+        public void buildProgramsFromRoot(File rootFolder, StringBuilder log) {
         programs.asList().clear();
-
+    
         if (rootFolder == null || !rootFolder.isDirectory()) {
             log.append("Root folder is invalid.\n");
             return;
         }
-
+    
         File[] children = rootFolder.listFiles();
-        if (children == null) {
+        if (children == null || children.length == 0) {
             log.append("Root folder is empty.\n");
             return;
         }
-
-        for (File sub : children) {
-            if (!sub.isDirectory()) {
-                continue;
-            }
-
-            File[] javaFiles = sub.listFiles((dir, name) -> name.endsWith(".java"));
-            if (javaFiles != null && javaFiles.length > 0) {
-                File javaFile = javaFiles[0];
-                String className = javaFile.getName();
-                if (className.endsWith(".java")) {
-                    className = className.substring(0, className.length() - 5);
-                }
-                Program p = new Program(className, javaFile);
+    
+        for (File file : children) {
+    
+            // ✅ DIRECTLY ACCEPT .java FILES IN ROOT
+            if (file.isFile() && file.getName().endsWith(".java")) {
+    
+                String className = file.getName().replace(".java", "");
+                Program p = new Program(className, file);
                 programs.add(p);
-                log.append("Found program: ").append(p.toString()).append("\n");
-            } else {
-                log.append("Skipping folder '").append(sub.getName())
-                   .append("' (no .java file found).\n");
+                log.append("Found program: ").append(p.getName()).append("\n");
             }
         }
     }
+
 
     // ---------------------- Compilation & execution helpers ----------------------
 
