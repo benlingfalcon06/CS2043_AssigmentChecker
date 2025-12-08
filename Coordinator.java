@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,7 +19,7 @@ public class Coordinator {
         this.listOfTestSuites = new ListOfTestSuites();
     }
 
-    // ---------------------- Test Suite / Test Cases (kept for design) ----------------------
+    // ---------------------- Test Suite / Test Cases ----------------------
 
     public void createEmptyTestSuite(String name) {
         currentSuite = new TestSuit(name, new ListOfTestCase());
@@ -29,11 +30,32 @@ public class Coordinator {
         return currentSuite;
     }
 
+    public void setCurrentSuite(String suiteName) {
+        currentSuite = listOfTestSuites.getSuite(suiteName);
+    }
+
+    public ListOfTestSuites getListOfTestSuites() {
+        return listOfTestSuites;
+    }
+
+    public List<String> getAllTestSuiteNames() {
+        return listOfTestSuites.getSuiteNames();
+    }
+
     public void addTestCase(String input, String expectedOutput) {
         if (currentSuite == null) {
             createEmptyTestSuite("DefaultSuite");
         }
         currentSuite.getTestCases().add(new TestCase(input, expectedOutput));
+    }
+
+    public void addTestCaseToSuite(String suiteName, String input, String expectedOutput) {
+        TestSuit suite = listOfTestSuites.getSuite(suiteName);
+        if (suite == null) {
+            createEmptyTestSuite(suiteName);
+            suite = currentSuite;
+        }
+        suite.getTestCases().add(new TestCase(input, expectedOutput));
     }
 
     public void loadTestCasesFromText(String suiteName, String text) {
@@ -58,13 +80,33 @@ public class Coordinator {
         listOfTestSuites.setSuite(currentSuite);
     }
 
-    // ---------------------- Program discovery (NO more name == .java requirement) ----------------------
+    public void uploadTestCasesToSuite(String suiteName, String text) {
+        TestSuit suite = listOfTestSuites.getSuite(suiteName);
+        if (suite == null) {
+            // Create new suite if doesn't exist
+            loadTestCasesFromText(suiteName, text);
+            return;
+        }
 
-    /**
-     * Discover Programs under a root folder:
-     *  - each subfolder is treated as one program container
-     *  - we pick the first .java file inside each subfolder
-     */
+        // Parse and add to existing suite
+        String[] lines = text.split("\\R");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+            String[] parts = trimmed.split("==>", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            String input = parts[0].trim();
+            String expected = parts[1].trim();
+            suite.getTestCases().add(new TestCase(input, expected));
+        }
+    }
+
+    // ---------------------- Program discovery ----------------------
+
     public void buildProgramsFromRoot(File rootFolder, StringBuilder log) {
         programs.asList().clear();
 
@@ -84,7 +126,6 @@ public class Coordinator {
                 continue;
             }
 
-            // find first .java file inside this subfolder
             File[] javaFiles = sub.listFiles((dir, name) -> name.endsWith(".java"));
             if (javaFiles != null && javaFiles.length > 0) {
                 File javaFile = javaFiles[0];
@@ -143,9 +184,6 @@ public class Coordinator {
         }
     }
 
-    /**
-     * Run a program with given stdin content (input.txt).
-     */
     private String runProgram(Program program, String stdin) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>();
         cmd.add("java");
@@ -156,7 +194,6 @@ public class Coordinator {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         Process p = pb.start();
 
-        // send stdin
         try (OutputStream os = p.getOutputStream()) {
             if (stdin != null && !stdin.isEmpty()) {
                 os.write(stdin.getBytes(StandardCharsets.UTF_8));
@@ -164,7 +201,6 @@ public class Coordinator {
             os.flush();
         }
 
-        // read stdout
         StringBuilder out = new StringBuilder();
         try (BufferedReader r = new BufferedReader(
                 new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
@@ -174,7 +210,6 @@ public class Coordinator {
             }
         }
 
-        // read stderr (optional)
         StringBuilder err = new StringBuilder();
         try (BufferedReader r = new BufferedReader(
                 new InputStreamReader(p.getErrorStream(), StandardCharsets.UTF_8))) {
@@ -193,26 +228,31 @@ public class Coordinator {
     }
 
     private String normalize(String s) {
+        if (s == null) return "";
         return s.trim().replace("\r\n", "\n");
     }
 
-    // ---------------------- MAIN EXECUTION: input.txt + expected_output.txt ----------------------
+    // ---------------------- EXECUTION WITH TEST SUITES ----------------------
 
     /**
-     * Execute all programs under rootFolder using:
-     *  - inputText as stdin
-     *  - expectedText as full expected stdout
-     * and compare.
+     * Execute all programs using a specific test suite
      */
-    public String executeInputExpected(File rootFolder, String inputText, String expectedText) {
+    public String executeWithTestSuite(File rootFolder, String suiteName) {
         StringBuilder log = new StringBuilder();
 
         if (rootFolder == null) {
             log.append("Root folder is null.\n");
             return log.toString();
         }
-        if (expectedText == null) {
-            log.append("Expected output text is null.\n");
+
+        TestSuit suite = listOfTestSuites.getSuite(suiteName);
+        if (suite == null) {
+            log.append("Test suite '").append(suiteName).append("' not found.\n");
+            return log.toString();
+        }
+
+        if (suite.getTestCases().size() == 0) {
+            log.append("Test suite '").append(suiteName).append("' has no test cases.\n");
             return log.toString();
         }
 
@@ -223,38 +263,97 @@ public class Coordinator {
             return log.toString();
         }
 
-        String normalizedExpected = normalize(expectedText);
+        log.append("\n╔═══════════════════════════════════════════════════════════╗\n");
+        log.append("  Testing with Suite: ").append(suiteName).append("\n");
+        log.append("  Total Test Cases: ").append(suite.getTestCases().size()).append("\n");
+        log.append("╚═══════════════════════════════════════════════════════════╝\n\n");
 
-        for (Program p : programs.asList()) {
-            log.append("\n=== Program: ").append(p.getName()).append(" ===\n");
+        // Reset all test cases before execution
+        suite.resetAllTestCases();
 
-            if (!compileProgram(p, log)) {
-                log.append("Skipping execution due to compilation failure.\n");
+        for (Program program : programs.asList()) {
+            log.append("\n════════════════════════════════════════════════════════════\n");
+            log.append("  Program: ").append(program.getName()).append("\n");
+            log.append("════════════════════════════════════════════════════════════\n");
+
+            if (!compileProgram(program, log)) {
+                log.append("❌ Skipping execution due to compilation failure.\n");
+                program.setCompiled(false);
                 continue;
             }
 
-            try {
-                String output = runProgram(p, inputText);
-                String normalizedOutput = normalize(output);
+            program.setCompiled(true);
+            int passed = 0;
+            int failed = 0;
 
-                log.append("--- PROGRAM OUTPUT ---\n")
-                   .append(normalizedOutput).append("\n");
-                log.append("--- EXPECTED OUTPUT ---\n")
-                   .append(normalizedExpected).append("\n");
+            for (int i = 0; i < suite.getTestCases().size(); i++) {
+                TestCase testCase = suite.getTestCases().get(i);
+                log.append("\n--- Test Case ").append(i + 1).append(" ---\n");
+                log.append("Input: ").append(testCase.getInput()).append("\n");
+                log.append("Expected: ").append(testCase.getExpectedOutput()).append("\n");
 
-                if (normalizedOutput.equals(normalizedExpected)) {
-                    log.append("RESULT: PASS\n");
-                } else {
-                    log.append("RESULT: FAIL\n");
+                try {
+                    String output = runProgram(program, testCase.getInput());
+                    testCase.evaluate(output);
+
+                    log.append("Actual: ").append(output).append("\n");
+
+                    if (testCase.isPassed()) {
+                        log.append("✓ PASS\n");
+                        passed++;
+                    } else {
+                        log.append("✗ FAIL\n");
+                        failed++;
+                    }
+
+                } catch (Exception e) {
+                    testCase.setErrorMessage(e.getMessage());
+                    log.append("❌ Runtime Error: ").append(e.getMessage()).append("\n");
+                    failed++;
                 }
+            }
 
-            } catch (Exception e) {
-                log.append("Runtime error for program ")
-                   .append(p.getName()).append(": ")
-                   .append(e.getMessage()).append("\n");
+            log.append("\n────────────────────────────────────────────────────────────\n");
+            log.append("  Results for ").append(program.getName()).append(":\n");
+            log.append("  Passed: ").append(passed).append(" / ").append(suite.getTestCases().size()).append("\n");
+            log.append("  Failed: ").append(failed).append("\n");
+            double percentage = (passed * 100.0) / suite.getTestCases().size();
+            log.append("  Pass Rate: ").append(String.format("%.1f%%", percentage)).append("\n");
+            log.append("────────────────────────────────────────────────────────────\n");
+
+            // Store results in program
+            program.setTestResults(passed, failed);
+        }
+
+        // Update suite statistics
+        suite.updateStatistics();
+        suite.setLastRunDate(LocalDateTime.now());
+
+        // Overall summary
+        log.append("\n╔═══════════════════════════════════════════════════════════╗\n");
+        log.append("  OVERALL SUMMARY\n");
+        log.append("╚═══════════════════════════════════════════════════════════╝\n");
+        
+        for (Program program : programs.asList()) {
+            if (program.isCompiled()) {
+                log.append("\n").append(program.getName()).append(": ");
+                log.append(program.getPassedTests()).append(" passed, ");
+                log.append(program.getFailedTests()).append(" failed ");
+                log.append("(").append(String.format("%.1f%%", program.getPassPercentage())).append(")");
+                
+                if (program.getPassedTests() == suite.getTestCases().size()) {
+                    log.append(" ✓ ALL TESTS PASSED");
+                }
+                log.append("\n");
+            } else {
+                log.append("\n").append(program.getName()).append(": Compilation Failed ❌\n");
             }
         }
 
         return log.toString();
+    }
+
+    public ListOfPrograms getPrograms() {
+        return programs;
     }
 }
