@@ -364,4 +364,88 @@ public class Coordinator {
     public ListOfPrograms getPrograms() {
         return programs;
     }
+    
+     // ----------------------------------------------------------
+    // Reload a single result file
+    // ----------------------------------------------------------
+    public String reloadResults(Path resultFile) {
+        StringBuilder log = new StringBuilder();
+
+        if (resultFile == null) {
+            return "No result file selected.\n";
+        }
+
+        log.append("Reloading results from: ")
+           .append(resultFile.toAbsolutePath())
+           .append(System.lineSeparator())
+           .append(System.lineSeparator());
+
+        try {
+            java.util.List<String> lines =
+                    Files.readAllLines(resultFile, java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : lines) {
+                log.append(line).append(System.lineSeparator());
+            }
+        } catch (IOException e) {
+            log.append("Error reading result file: ")
+               .append(e.getMessage())
+               .append(System.lineSeparator());
+        }
+
+        return log.toString();
+    }
+
+    // ----------------------------------------------------------
+    // Compare two result files line by line
+    // ----------------------------------------------------------
+    public String compareResultFiles(Path file1, Path file2) {
+        StringBuilder log = new StringBuilder();
+
+        if (file1 == null || file2 == null) {
+            return "Both result files must be selected.\n";
+        }
+
+        log.append("Comparing result files:")
+           .append(System.lineSeparator());
+        log.append("  File 1: ").append(file1.toAbsolutePath())
+           .append(System.lineSeparator());
+        log.append("  File 2: ").append(file2.toAbsolutePath())
+           .append(System.lineSeparator())
+           .append(System.lineSeparator());
+
+        try {
+            java.util.List<String> lines1 =
+                    Files.readAllLines(file1, java.nio.charset.StandardCharsets.UTF_8);
+            java.util.List<String> lines2 =
+                    Files.readAllLines(file2, java.nio.charset.StandardCharsets.UTF_8);
+
+            int maxLines = Math.max(lines1.size(), lines2.size());
+            boolean anyDifference = false;
+
+            for (int i = 0; i < maxLines; i++) {
+                String l1 = (i < lines1.size()) ? lines1.get(i) : "";
+                String l2 = (i < lines2.size()) ? lines2.get(i) : "";
+
+                if (!l1.equals(l2)) {
+                    anyDifference = true;
+                    log.append("Line ").append(i + 1).append(" differs:")
+                       .append(System.lineSeparator());
+                    log.append("  < ").append(l1).append(System.lineSeparator());
+                    log.append("  > ").append(l2).append(System.lineSeparator())
+                       .append(System.lineSeparator());
+                }
+            }
+
+            if (!anyDifference) {
+                log.append("The two result files are identical.")
+                   .append(System.lineSeparator());
+            }
+        } catch (IOException e) {
+            log.append("Error reading result files: ")
+               .append(e.getMessage())
+               .append(System.lineSeparator());
+        }
+
+        return log.toString();
+    }
 }
