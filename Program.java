@@ -1,14 +1,16 @@
 import java.io.File;
 
 public class Program {
-    private final String name;   // program name = folder name
-    private final File javaFile; // the .java file containing main
-    private boolean compiled;    // compilation status
-    private int passedTests;     // number of passed tests
-    private int failedTests;     // number of failed tests
+    private final String name;           // Student name (folder name)
+    private final File projectDirectory; // The folder containing the student's code
+    private final File javaFile;         // The specific .java file containing main()
+    private boolean compiled;
+    private int passedTests;
+    private int failedTests;
 
-    public Program(String name, File javaFile) {
+    public Program(String name, File projectDirectory, File javaFile) {
         this.name = name;
+        this.projectDirectory = projectDirectory;
         this.javaFile = javaFile;
         this.compiled = false;
         this.passedTests = 0;
@@ -19,12 +21,16 @@ public class Program {
         return name;
     }
 
+    public File getProjectDirectory() {
+        return projectDirectory;
+    }
+
     public File getJavaFile() {
         return javaFile;
     }
 
     public String getMainClassName() {
-        // class name assumed to be file name without .java
+        // Class name is the file name without .java
         String fileName = javaFile.getName();
         if (fileName.endsWith(".java")) {
             return fileName.substring(0, fileName.length() - 5);
@@ -33,6 +39,7 @@ public class Program {
     }
 
     public String getClassPathDir() {
+        // Execution classpath is the directory containing the file
         return javaFile.getParentFile().getAbsolutePath();
     }
 
@@ -67,29 +74,8 @@ public class Program {
         return (passedTests * 100.0) / total;
     }
 
-    public void resetTestResults() {
-        this.passedTests = 0;
-        this.failedTests = 0;
-        this.compiled = false;
-    }
-
     @Override
     public String toString() {
-        return "Program{" + name + ", file=" + javaFile.getAbsolutePath() + "}";
-    }
-
-    public String toDetailedString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Program: ").append(name).append("\n");
-        sb.append("File: ").append(javaFile.getAbsolutePath()).append("\n");
-        sb.append("Compiled: ").append(compiled ? "Yes" : "No").append("\n");
-        
-        if (getTotalTests() > 0) {
-            sb.append("Tests Passed: ").append(passedTests).append("\n");
-            sb.append("Tests Failed: ").append(failedTests).append("\n");
-            sb.append("Pass Rate: ").append(String.format("%.1f%%", getPassPercentage())).append("\n");
-        }
-        
-        return sb.toString();
+        return "Program{" + name + ", dir=" + projectDirectory.getName() + ", main=" + javaFile.getName() + "}";
     }
 }
